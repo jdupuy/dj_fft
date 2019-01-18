@@ -134,6 +134,7 @@ template <typename T> arg<T> eval_1d(const arg<T> &xi, const e_dir &dir)
     return xo;
 }
 
+
 /*
  * Computes a 2D Fourier transform
  * with O(N^2 log N) complexity using the butterfly technique
