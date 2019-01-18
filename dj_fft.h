@@ -122,12 +122,12 @@ template <typename T> arg<T> eval_1d(const arg<T> &xi, const e_dir &dir)
         for (int j = 0; j < (cnt/2); ++j) {
             int i1 = ((j >> i) << (i + 1)) + j % bm; // left wing
             int i2 = i1 ^ bm;                        // right wing
-            T a1 = ang * (i1 ^ bw); // left wing rotation
-            T a2 = ang * (i2 ^ bw); // right wing rotation
+            std::complex<T> z1 = std::polar(T(1), ang * T(i1 ^ bw)); // left wing rotation
+            std::complex<T> z2 = std::polar(T(1), ang * T(i2 ^ bw)); // right wing rotation
             std::complex<T> tmp = xo[i1];
 
-            xo[i1]+= std::polar(T(1), a1) * xo[i2];
-            xo[i2] = tmp + std::polar(T(1), a2) * xo[i2];
+            xo[i1]+= z1 * xo[i2];
+            xo[i2] = tmp + z2 * xo[i2];
         }
     }
 
@@ -172,35 +172,146 @@ template <typename T> arg<T> eval_2d(const arg<T> &xi, const e_dir &dir)
             int i21 = ((j2 >> i) << (i + 1)) + j2 % bm; // ymin wing
             int i12 = i11 ^ bm;                         // xmax wing
             int i22 = i21 ^ bm;                         // ymax wing
-            T a11 = ang * (i11 ^ bw); // upper left rotation
-            T a12 = ang * (i12 ^ bw); // upper right rotation
-            T a21 = ang * (i21 ^ bw); // lower left rotation
-            T a22 = ang * (i22 ^ bw); // lower right rotation
             int k11 = i11 + cnt * i21; // array offset
             int k12 = i12 + cnt * i21; // array offset
             int k21 = i11 + cnt * i22; // array offset
             int k22 = i12 + cnt * i22; // array offset
 
             // FFT-X
+            std::complex<T> z11 = std::polar(T(1), ang * T(i11 ^ bw)); // left rotation
+            std::complex<T> z12 = std::polar(T(1), ang * T(i12 ^ bw)); // right rotation
             std::complex<T> tmp1 = xo[k11];
             std::complex<T> tmp2 = xo[k21];
-            xo[k11]+= std::polar(T(1), a11) * xo[k12];
-            xo[k12] = tmp1 + std::polar(T(1), a12) * xo[k12];
-            xo[k21]+= std::polar(T(1), a11) * xo[k22];
-            xo[k22] = tmp2 + std::polar(T(1), a12) * xo[k22];
+
+            xo[k11]+= z11 * xo[k12];
+            xo[k12] = tmp1 + z12 * xo[k12];
+            xo[k21]+= z11 * xo[k22];
+            xo[k22] = tmp2 + z12 * xo[k22];
 
             // FFT-Y
+            std::complex<T> z21 = std::polar(T(1), ang * T(i21 ^ bw)); // top rotation
+            std::complex<T> z22 = std::polar(T(1), ang * T(i22 ^ bw)); // bottom rotation
             std::complex<T> tmp3 = xo[k11];
             std::complex<T> tmp4 = xo[k12];
-            xo[k11]+= std::polar(T(1), a21) * xo[k21];
-            xo[k21] = tmp3 + std::polar(T(1), a22) * xo[k21];
-            xo[k12]+= std::polar(T(1), a21) * xo[k22];
-            xo[k22] = tmp4 + std::polar(T(1), a22) * xo[k22];
+
+            xo[k11]+= z21 * xo[k21];
+            xo[k21] = tmp3 + z22 * xo[k21];
+            xo[k12]+= z21 * xo[k22];
+            xo[k22] = tmp4 + z22 * xo[k22];
         }
     }
 
     return xo;
 }
+
+#if 1
+/*
+ * Computes a 3D Fourier transform
+ * with O(N^3 log N) complexity using the butterfly technique
+ *
+ * NOTE: the input must be a square matrix whose size is a power-of-two
+ */
+template <typename T> arg<T> eval_3d(const arg<T> &xi, const e_dir &dir)
+{
+    DJ_ASSERT((xi.size() & (xi.size() - 1)) == 0 && "invalid input size");
+    int cnt3 = (int)xi.size();   // NxNxN
+    int msb = findMSB(cnt3) / 3; // lg2(N) = lg2(cbrt(NxNxN))
+    int cnt = 1 << msb;          // N = 2^lg2(N)
+    T nrm = T(1) / (T(cnt) * std::sqrt(T(cnt)));
+    arg<T> xo(cnt3);
+
+    // pre-process the input data
+    for (int j3 = 0; j3 < cnt; ++j3)
+    for (int j2 = 0; j2 < cnt; ++j2)
+    for (int j1 = 0; j1 < cnt; ++j1) {
+        int k3 = bitr(j3, msb);
+        int k2 = bitr(j2, msb);
+        int k1 = bitr(j1, msb);
+
+        xo[j1 + cnt * (j2 + cnt * j3)] = nrm * xi[k1 + cnt * (k2 + cnt * k3)];
+    }
+
+    // fft passes
+    for (int i = 0; i < msb; ++i) {
+        int bm = 1 << i; // butterfly mask
+        int bw = 2 << i; // butterfly width
+        float ang = T(dir) * Pi / T(bm); // precomputation
+
+        // fft butterflies
+        for (int j3 = 0; j3 < (cnt/2); ++j3)
+        for (int j2 = 0; j2 < (cnt/2); ++j2)
+        for (int j1 = 0; j1 < (cnt/2); ++j1) {
+            int i11 = ((j1 >> i) << (i + 1)) + j1 % bm; // xmin wing
+            int i21 = ((j2 >> i) << (i + 1)) + j2 % bm; // ymin wing
+            int i31 = ((j3 >> i) << (i + 1)) + j3 % bm; // zmin wing
+            int i12 = i11 ^ bm;                         // xmax wing
+            int i22 = i21 ^ bm;                         // ymax wing
+            int i32 = i31 ^ bm;                         // zmax wing
+            int k111 = i11 + cnt * (i21 + cnt * i31); // array offset
+            int k121 = i12 + cnt * (i21 + cnt * i31); // array offset
+            int k211 = i11 + cnt * (i22 + cnt * i31); // array offset
+            int k221 = i12 + cnt * (i22 + cnt * i31); // array offset
+            int k112 = i11 + cnt * (i21 + cnt * i32); // array offset
+            int k122 = i12 + cnt * (i21 + cnt * i32); // array offset
+            int k212 = i11 + cnt * (i22 + cnt * i32); // array offset
+            int k222 = i12 + cnt * (i22 + cnt * i32); // array offset
+
+            // FFT-X
+            std::complex<T> z11 = std::polar(T(1), ang * T(i11 ^ bw)); // left rotation
+            std::complex<T> z12 = std::polar(T(1), ang * T(i12 ^ bw)); // right rotation
+            std::complex<T> tmp01 = xo[k111];
+            std::complex<T> tmp02 = xo[k211];
+            std::complex<T> tmp03 = xo[k112];
+            std::complex<T> tmp04 = xo[k212];
+
+            xo[k111]+= z11 * xo[k121];
+            xo[k121] = tmp01 + z12 * xo[k121];
+            xo[k211]+= z11 * xo[k221];
+            xo[k221] = tmp02 + z12 * xo[k221];
+            xo[k112]+= z11 * xo[k122];
+            xo[k122] = tmp03 + z12 * xo[k122];
+            xo[k212]+= z11 * xo[k222];
+            xo[k222] = tmp04 + z12 * xo[k222];
+
+            // FFT-Y
+            std::complex<T> z21 = std::polar(T(1), ang * T(i21 ^ bw)); // top rotation
+            std::complex<T> z22 = std::polar(T(1), ang * T(i22 ^ bw)); // bottom rotation
+            std::complex<T> tmp05 = xo[k111];
+            std::complex<T> tmp06 = xo[k121];
+            std::complex<T> tmp07 = xo[k112];
+            std::complex<T> tmp08 = xo[k122];
+
+            xo[k111]+= z21 * xo[k211];
+            xo[k211] = tmp05 + z22 * xo[k211];
+            xo[k121]+= z21 * xo[k221];
+            xo[k221] = tmp06 + z22 * xo[k221];
+            xo[k112]+= z21 * xo[k212];
+            xo[k212] = tmp07 + z22 * xo[k212];
+            xo[k122]+= z21 * xo[k222];
+            xo[k222] = tmp08 + z22 * xo[k222];
+
+            // FFT-Z
+            std::complex<T> z31 = std::polar(T(1), ang * T(i31 ^ bw)); // front rotation
+            std::complex<T> z32 = std::polar(T(1), ang * T(i32 ^ bw)); // back rotation
+            std::complex<T> tmp09 = xo[k111];
+            std::complex<T> tmp10 = xo[k121];
+            std::complex<T> tmp11 = xo[k211];
+            std::complex<T> tmp12 = xo[k221];
+
+            xo[k111]+= z31 * xo[k112];
+            xo[k112] = tmp09 + z32 * xo[k112];
+            xo[k121]+= z31 * xo[k122];
+            xo[k122] = tmp10 + z32 * xo[k122];
+            xo[k211]+= z31 * xo[k212];
+            xo[k212] = tmp11 + z32 * xo[k212];
+            xo[k221]+= z31 * xo[k222];
+            xo[k222] = tmp12 + z32 * xo[k222];
+        }
+    }
+
+    return xo;
+}
+#endif
 
 
 } // namespace fft
