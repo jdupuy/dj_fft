@@ -33,7 +33,7 @@ namespace fft {
 //
 //
 //// end header file ///////////////////////////////////////////////////////////
-#endif // DJ_INCLUDE_FFT_H
+
 
 #include <cmath>
 #include <cstdint>
@@ -175,10 +175,10 @@ template <typename T> arg<T> eval_2d(const arg<T> &xi, const e_dir &dir)
             T a12 = ang * (i12 ^ bw); // upper right rotation
             T a21 = ang * (i21 ^ bw); // lower left rotation
             T a22 = ang * (i22 ^ bw); // lower right rotation
-            int k11 = i11 + i21 * cnt; // array offset
-            int k12 = i12 + i21 * cnt; // array offset
-            int k21 = i11 + i22 * cnt; // array offset
-            int k22 = i12 + i22 * cnt; // array offset
+            int k11 = i11 + cnt * i21; // array offset
+            int k12 = i12 + cnt * i21; // array offset
+            int k21 = i11 + cnt * i22; // array offset
+            int k22 = i12 + cnt * i22; // array offset
 
             // FFT-X
             std::complex<T> tmp1 = xo[k11];
@@ -202,6 +202,7 @@ template <typename T> arg<T> eval_2d(const arg<T> &xi, const e_dir &dir)
 }
 
 
-
 } // namespace fft
 } // namespace dj
+
+#endif // DJ_INCLUDE_FFT_H
