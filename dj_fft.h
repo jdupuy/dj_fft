@@ -204,7 +204,6 @@ template <typename T> arg<T> eval_2d(const arg<T> &xi, const e_dir &dir)
     return xo;
 }
 
-#if 1
 /*
  * Computes a 3D Fourier transform
  * with O(N^3 log N) complexity using the butterfly technique
@@ -311,7 +310,6 @@ template <typename T> arg<T> eval_3d(const arg<T> &xi, const e_dir &dir)
 
     return xo;
 }
-#endif
 
 
 } // namespace fft
