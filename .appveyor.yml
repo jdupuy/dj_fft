@@ -6,11 +6,11 @@ test: off
 branches:
   only:
     - master
-clone_folder: C:\gl
+clone_folder: C:\fft
 install:
   - git submodule update --init --recursive
 build_script:
-  - cd C:\gl\examples
+  - cd C:\fft\examples
   - mkdir build
   - cd build
   - cmake -G "Visual Studio 15 2017 Win64" ..
