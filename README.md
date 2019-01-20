@@ -9,7 +9,7 @@ This repository provides a header-only library to compute fourier transforms in 
 ### Usage
 The 1D, 2D, and 3D FFT routines return an `std::vector<std::complex<T>>`, given another `std::vector<std::complex<T>>` as input, which specifies the data that must be transformed, as well as an enum class `dj::fft::e_dir`, which specifies in which direction the FFT must be computed (specify `dj::fft::e_dir::DIR_FWD` for the forward direction and `dj::fft::e_dir::DIR_BWD` for the backward direction).
 
-Note that the input vector is expected to be of size `N` for 1D FFT, `ǸxN` for a 2D FFT, and `NxNxN` for a 3D FFT, where `N` *must* be a power of two. Note that the 2D and 3D vectors are expected to be arranged in a flat row-major fashion, i.e., the 2D and 3D elements `(i, j)` and `(i, j, k)` are respectively located at index `i + N * j` and `i + N * (j + N * k)` in memory.
+Note that the input vector is expected to be of size `N` for 1D FFT, `NxN` for a 2D FFT, and `NxNxN` for a 3D FFT, where `N` *must* be a power of two. Note that the 2D and 3D vectors are expected to be arranged in a flat row-major fashion, i.e., the 2D and 3D elements `(i, j)` and `(i, j, k)` are respectively located at index `i + N * j` and `i + N * (j + N * k)` in memory.
 
 Below is a C++ pseudocode for computing a 2D FFT in forward direction:
 ```c++
