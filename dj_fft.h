@@ -27,6 +27,13 @@ namespace fft {
     template <typename T> arg<T> eval_1d(const arg<T> &xi, const e_dir &dir);
     template <typename T> arg<T> eval_2d(const arg<T> &xi, const e_dir &dir);
     template <typename T> arg<T> eval_3d(const arg<T> &xi, const e_dir &dir);
+
+#ifdef DJ_FFT_ENABLE_GPU
+    // GPU FFT routines (float precision only)
+    arg<float> eval_1d_gpu(const arg<float> &xi, const e_dir &dir);
+    arg<float> eval_2d_gpu(const arg<float> &xi, const e_dir &dir);
+    arg<float> eval_3d_gpu(const arg<float> &xi, const e_dir &dir);
+#endif
 } // namespace fft
 } // namespace dj
 
@@ -311,6 +318,442 @@ template <typename T> arg<T> eval_3d(const arg<T> &xi, const e_dir &dir)
     return xo;
 }
 
+#ifdef DJ_FFT_IMPLEMENTATION
+static const char *s_ComputeShaderSrc = {
+    "uniform float u_Dir;   // FFT direction\n"
+    "uniform int u_ArgSize; // N\n"
+    "uniform int u_PassID;  // pass number in [0, lg2(N))\n\n"
+
+    "layout (local_size_x = 1,  local_size_y = 1, local_size_z = 1) in;\n\n"
+
+    "vec2 expi(float ang) { return vec2(cos(ang), sin(ang)); }\n"
+    "vec2 zmul(vec2 z1, vec2 z2) {\n"
+    "    return vec2(z1.x * z2.x - z1.y * z2.y,\n"
+    "                z1.x * z2.y + z1.y * z2.x);\n"
+    "}\n\n"
+
+    "#ifdef FFT_1D\n"
+    "layout (rg32f) uniform coherent image1D u_Arg; // FFT arg\n"
+    "void main()\n"
+    "{\n"
+    "    int j = int(gl_GlobalInvocationID.x);\n\n"
+
+    "    if (j >= u_ArgSize/2)\n"
+    "        return;\n\n"
+
+    "   const float pi = 3.141592653589793238462643383279502884f;\n"
+    "    int i = u_PassID;\n"
+    "    int bm = 1 << i;\n"
+    "    int bw = 2 << i;\n"
+    "    float ang = u_Dir * pi / float(bm);\n"
+    "    int i1 = ((j >> i) << (i + 1)) + j % bm; // xmin wing\n"
+    "    int i2 = i1 ^ bm;                        // xmax wing\n"
+    "    vec2 z1 = expi(ang * float(i1 ^ bw));\n"
+    "    vec2 z2 = expi(ang * float(i2 ^ bw));\n"
+    "    vec2 b1 = imageLoad(u_Arg, i1).xy;\n"
+    "    vec2 b2 = imageLoad(u_Arg, i2).xy;\n\n"
+
+    "    imageStore(u_Arg, i1, vec4(b1 + zmul(z1, b2), 0, 0));\n"
+    "    imageStore(u_Arg, i2, vec4(b1 + zmul(z2, b2), 0, 0));\n"
+    "}\n"
+    "#endif\n\n"
+
+    "#ifdef FFT_2D\n"
+    "layout (rg32f) uniform coherent image2D u_Arg; // FFT arg\n"
+    "void main()\n"
+    "{\n"
+    "    int j1 = int(gl_GlobalInvocationID.x);\n"
+    "    int j2 = int(gl_GlobalInvocationID.y);\n\n"
+    ""
+    "    if (j1 >= u_ArgSize/2 || j2 >= u_ArgSize/2)\n"
+    "        return;\n\n"
+    ""
+    "    const float pi = 3.141592653589793238462643383279502884f;\n"
+    "    int i = u_PassID;\n"
+    "    int bm = 1 << i;\n"
+    "    int bw = 2 << i;\n"
+    "    float ang = u_Dir * pi / float(bm);\n"
+    "    int i11 = ((j1 >> i) << (i + 1)) + j1 % bm; // xmin wing\n"
+    "    int i21 = ((j2 >> i) << (i + 1)) + j2 % bm; // ymin wing\n"
+    "    int i12 = i11 ^ bm;                         // xmax wing\n"
+    "    int i22 = i21 ^ bm;                         // ymax wing\n"
+    "    ivec2 k11 = ivec2(i11, i21);\n"
+    "    ivec2 k12 = ivec2(i12, i21);\n"
+    "    ivec2 k21 = ivec2(i11, i22);\n"
+    "    ivec2 k22 = ivec2(i12, i22);\n\n"
+    ""
+    "    // FFT-X\n"
+    "    {\n"
+    "        vec2 b11 = imageLoad(u_Arg, k11).xy;\n"
+    "        vec2 b12 = imageLoad(u_Arg, k12).xy;\n"
+    "        vec2 b21 = imageLoad(u_Arg, k21).xy;\n"
+    "        vec2 b22 = imageLoad(u_Arg, k22).xy;\n"
+    "        vec2 z11 = expi(ang * float(i11 ^ bw));\n"
+    "        vec2 z12 = expi(ang * float(i12 ^ bw));\n\n"
+    ""
+    "        imageStore(u_Arg, k11, vec4(b11 + zmul(z11, b12), 0, 0));\n"
+    "        imageStore(u_Arg, k12, vec4(b11 + zmul(z12, b12), 0, 0));\n"
+    "        imageStore(u_Arg, k21, vec4(b21 + zmul(z11, b22), 0, 0));\n"
+    "        imageStore(u_Arg, k22, vec4(b21 + zmul(z12, b22), 0, 0));\n"
+    "    }\n\n"
+    ""
+    "    // FFT-Y\n"
+    "    {\n"
+    "        vec2 b11 = imageLoad(u_Arg, k11).xy;\n"
+    "        vec2 b12 = imageLoad(u_Arg, k12).xy;\n"
+    "        vec2 b21 = imageLoad(u_Arg, k21).xy;\n"
+    "        vec2 b22 = imageLoad(u_Arg, k22).xy;\n"
+    "        vec2 z21 = expi(ang * float(i21 ^ bw));\n"
+    "        vec2 z22 = expi(ang * float(i22 ^ bw));\n\n"
+    ""
+    "        imageStore(u_Arg, k11, vec4(b11 + zmul(z21, b21), 0, 0));\n"
+    "        imageStore(u_Arg, k21, vec4(b11 + zmul(z22, b21), 0, 0));\n"
+    "        imageStore(u_Arg, k12, vec4(b12 + zmul(z21, b22), 0, 0));\n"
+    "        imageStore(u_Arg, k22, vec4(b12 + zmul(z22, b22), 0, 0));\n"
+    "    }\n"
+    "}\n"
+    "#endif\n\n"
+    ""
+    "#ifdef FFT_3D\n"
+    "layout (rg32f) uniform image3D u_Arg; // FFT arg\n"
+    "void main()\n"
+    "{\n"
+    "    int j1 = int(gl_GlobalInvocationID.x);\n"
+    "    int j2 = int(gl_GlobalInvocationID.y);\n"
+    "    int j3 = int(gl_GlobalInvocationID.z);\n\n"
+    ""
+    "    if (j1 >= u_ArgSize/2 || j2 >= u_ArgSize/2 || j3 >= u_ArgSize/2)\n"
+    "        return;\n\n"
+    ""
+    "    const float pi = 3.141592653589793238462643383279502884f;\n"
+    "    int i = u_PassID;\n"
+    "    int bm = 1 << i;\n"
+    "    int bw = 2 << i;\n"
+    "    float ang = u_Dir * pi / float(bm);\n"
+    "    int i11 = ((j1 >> i) << (i + 1)) + j1 % bm; // xmin wing\n"
+    "    int i21 = ((j2 >> i) << (i + 1)) + j2 % bm; // ymin wing\n"
+    "    int i31 = ((j3 >> i) << (i + 1)) + j3 % bm; // zmin wing\n"
+    "    int i12 = i11 ^ bm;                         // xmax wing\n"
+    "    int i22 = i21 ^ bm;                         // ymax wing\n"
+    "    int i32 = i31 ^ bm;                         // zmax wing\n"
+    "    ivec3 k111 = ivec3(i11, i21, i31);\n"
+    "    ivec3 k121 = ivec3(i12, i21, i31);\n"
+    "    ivec3 k211 = ivec3(i11, i22, i31);\n"
+    "    ivec3 k221 = ivec3(i12, i22, i31);\n"
+    "    ivec3 k112 = ivec3(i11, i21, i32);\n"
+    "    ivec3 k122 = ivec3(i12, i21, i32);\n"
+    "    ivec3 k212 = ivec3(i11, i22, i32);\n"
+    "    ivec3 k222 = ivec3(i12, i22, i32);\n\n"
+    ""
+    "    // FFT-X\n"
+    "    {\n"
+    "        vec2 b111 = imageLoad(u_Arg, k111).xy;\n"
+    "        vec2 b121 = imageLoad(u_Arg, k121).xy;\n"
+    "        vec2 b211 = imageLoad(u_Arg, k211).xy;\n"
+    "        vec2 b221 = imageLoad(u_Arg, k221).xy;\n"
+    "        vec2 b112 = imageLoad(u_Arg, k112).xy;\n"
+    "        vec2 b122 = imageLoad(u_Arg, k122).xy;\n"
+    "        vec2 b212 = imageLoad(u_Arg, k212).xy;\n"
+    "        vec2 b222 = imageLoad(u_Arg, k222).xy;\n"
+    "        vec2 z11 = expi(ang * float(i11 ^ bw));\n"
+    "        vec2 z12 = expi(ang * float(i12 ^ bw));\n\n"
+    ""
+    "        imageStore(u_Arg, k111, vec4(b111 + zmul(z11, b121), 0, 0));\n"
+    "        imageStore(u_Arg, k121, vec4(b111 + zmul(z12, b121), 0, 0));\n"
+    "        imageStore(u_Arg, k211, vec4(b211 + zmul(z11, b221), 0, 0));\n"
+    "        imageStore(u_Arg, k221, vec4(b211 + zmul(z12, b221), 0, 0));\n"
+    "        imageStore(u_Arg, k112, vec4(b112 + zmul(z11, b122), 0, 0));\n"
+    "        imageStore(u_Arg, k122, vec4(b112 + zmul(z12, b122), 0, 0));\n"
+    "        imageStore(u_Arg, k212, vec4(b212 + zmul(z11, b222), 0, 0));\n"
+    "        imageStore(u_Arg, k222, vec4(b212 + zmul(z12, b222), 0, 0));\n"
+    "    }\n\n"
+    ""
+    "    // FFT-Y\n"
+    "    {\n"
+    "        vec2 b111 = imageLoad(u_Arg, k111).xy;\n"
+    "        vec2 b121 = imageLoad(u_Arg, k121).xy;\n"
+    "        vec2 b211 = imageLoad(u_Arg, k211).xy;\n"
+    "        vec2 b221 = imageLoad(u_Arg, k221).xy;\n"
+    "        vec2 b112 = imageLoad(u_Arg, k112).xy;\n"
+    "        vec2 b122 = imageLoad(u_Arg, k122).xy;\n"
+    "        vec2 b212 = imageLoad(u_Arg, k212).xy;\n"
+    "        vec2 b222 = imageLoad(u_Arg, k222).xy;\n"
+    "        vec2 z21 = expi(ang * float(i21 ^ bw));\n"
+    "        vec2 z22 = expi(ang * float(i22 ^ bw));\n\n"
+
+    "        imageStore(u_Arg, k111, vec4(b111 + zmul(z21, b211), 0, 0));\n"
+    "        imageStore(u_Arg, k211, vec4(b111 + zmul(z22, b211), 0, 0));\n"
+    "        imageStore(u_Arg, k121, vec4(b121 + zmul(z21, b221), 0, 0));\n"
+    "        imageStore(u_Arg, k221, vec4(b121 + zmul(z22, b221), 0, 0));\n"
+    "        imageStore(u_Arg, k112, vec4(b112 + zmul(z21, b212), 0, 0));\n"
+    "        imageStore(u_Arg, k212, vec4(b112 + zmul(z22, b212), 0, 0));\n"
+    "        imageStore(u_Arg, k122, vec4(b122 + zmul(z21, b222), 0, 0));\n"
+    "        imageStore(u_Arg, k222, vec4(b122 + zmul(z22, b222), 0, 0));\n"
+    "    }\n\n"
+    ""
+    "    // FFT-Z\n"
+    "    {\n"
+    "        vec2 b111 = imageLoad(u_Arg, k111).xy;\n"
+    "        vec2 b121 = imageLoad(u_Arg, k121).xy;\n"
+    "        vec2 b211 = imageLoad(u_Arg, k211).xy;\n"
+    "        vec2 b221 = imageLoad(u_Arg, k221).xy;\n"
+    "        vec2 b112 = imageLoad(u_Arg, k112).xy;\n"
+    "        vec2 b122 = imageLoad(u_Arg, k122).xy;\n"
+    "        vec2 b212 = imageLoad(u_Arg, k212).xy;\n"
+    "        vec2 b222 = imageLoad(u_Arg, k222).xy;\n"
+    "        vec2 z31 = expi(ang * float(i31 ^ bw));\n"
+    "        vec2 z32 = expi(ang * float(i32 ^ bw));\n\n"
+    ""
+    "        imageStore(u_Arg, k111, vec4(b111 + zmul(z31, b112), 0, 0));\n"
+    "        imageStore(u_Arg, k112, vec4(b111 + zmul(z32, b112), 0, 0));\n"
+    "        imageStore(u_Arg, k121, vec4(b121 + zmul(z31, b122), 0, 0));\n"
+    "        imageStore(u_Arg, k122, vec4(b121 + zmul(z32, b122), 0, 0));\n"
+    "        imageStore(u_Arg, k211, vec4(b211 + zmul(z31, b212), 0, 0));\n"
+    "        imageStore(u_Arg, k212, vec4(b211 + zmul(z32, b212), 0, 0));\n"
+    "        imageStore(u_Arg, k221, vec4(b221 + zmul(z31, b222), 0, 0));\n"
+    "        imageStore(u_Arg, k222, vec4(b221 + zmul(z32, b222), 0, 0));\n"
+    "    }\n"
+    "}\n"
+    "#endif\n"
+};
+
+/*
+ * Compute a 1D FFT on the GPU
+ */
+arg<float> eval_1d_gpu(const arg<float> &xi, const e_dir &dir)
+{
+    DJ_ASSERT((xi.size() & (xi.size() - 1)) == 0 && "invalid input size");
+    int cnt = (int)xi.size();
+    int msb = findMSB(cnt);
+    float nrm = float(1) / std::sqrt(cnt);
+    arg<float> xo(cnt);
+    struct {
+        GLuint texture, program;
+        struct {GLint passID;} uniformLocations;
+    } gl;
+
+    // pre-process the input data
+    for (int j = 0; j < cnt; ++j)
+        xo[j] = nrm * xi[bitr(j, msb)];
+
+    // upload data to GPU
+    glGenTextures(1, &gl.texture);
+    glBindTexture(GL_TEXTURE_1D, gl.texture);
+    glTexStorage1D(GL_TEXTURE_1D, 1, GL_RG32F, cnt);
+    glTexSubImage1D(GL_TEXTURE_1D, 0, 0, cnt, GL_RG, GL_FLOAT, &xo[0]);
+    glBindImageTexture(0, gl.texture, 0, GL_FALSE, 0, GL_READ_WRITE, GL_RG32F);
+
+    // setup GPU Kernel
+    {
+        GLuint shader = glCreateShader(GL_COMPUTE_SHADER);
+        const GLchar *shaderSrc[] = {
+            "#version 450 core\n",
+            "#define FFT_1D\n",
+            s_ComputeShaderSrc
+        };
+
+        // create program
+        gl.program = glCreateProgram();
+
+        // compile and attach shader
+        glShaderSource(shader,
+                       sizeof(shaderSrc) / sizeof(shaderSrc[0]),
+                       shaderSrc,
+                       NULL);
+        glCompileShader(shader);
+        glAttachShader(gl.program, shader);
+        glDeleteShader(shader);
+
+        // link program and setup uniforms
+        glLinkProgram(gl.program);
+        glUseProgram(gl.program);
+        gl.uniformLocations.passID =
+                    glGetUniformLocation(gl.program, "u_PassID");
+        glUniform1f(glGetUniformLocation(gl.program, "u_Dir"), float(dir));
+        glUniform1i(glGetUniformLocation(gl.program, "u_ArgSize"), cnt);
+        glUniform1i(glGetUniformLocation(gl.program, "u_Arg"), 0);
+    }
+
+    // run
+    for (int i = 0; i < msb; ++i) {
+        glUniform1i(gl.uniformLocations.passID, i);
+        glDispatchCompute(cnt, 1, 1);
+        glMemoryBarrier(GL_ALL_BARRIER_BITS);
+    }
+
+    // retrieve data
+    glGetTexImage(GL_TEXTURE_1D, 0, GL_RG, GL_FLOAT, &xo[0]);
+
+    // cleanup GL state
+    glDeleteProgram(gl.program);
+    glDeleteTextures(1, &gl.texture);
+
+    return xo;
+}
+
+/*
+ * Compute a 2D FFT on the GPU
+ */
+arg<float> eval_2d_gpu(const arg<float> &xi, const e_dir &dir)
+{
+    DJ_ASSERT((xi.size() & (xi.size() - 1)) == 0 && "invalid input size");
+    int cnt2 = (int)xi.size();   // NxN
+    int msb = findMSB(cnt2) / 2; // lg2(N) = lg2(sqrt(NxN))
+    int cnt = 1 << msb;          // N = 2^lg2(N)
+    float nrm = float(1) / float(cnt);
+    arg<float> xo(cnt2);
+    struct {
+        GLuint texture, program;
+        struct {GLint passID;} uniformLocations;
+    } gl;
+
+    // pre-process the input data
+    for (int j2 = 0; j2 < cnt; ++j2)
+    for (int j1 = 0; j1 < cnt; ++j1) {
+        int k2 = bitr(j2, msb);
+        int k1 = bitr(j1, msb);
+
+        xo[j1 + cnt * j2] = nrm * xi[k1 + cnt * k2];
+    }
+
+    // upload data to GPU
+    glGenTextures(1, &gl.texture);
+    glBindTexture(GL_TEXTURE_2D, gl.texture);
+    glTexStorage2D(GL_TEXTURE_2D, 1, GL_RG32F, cnt, cnt);
+    glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, cnt, cnt, GL_RG, GL_FLOAT, &xo[0]);
+    glBindImageTexture(0, gl.texture, 0, GL_FALSE, 0, GL_READ_WRITE, GL_RG32F);
+
+    // setup GPU Kernel
+    {
+        GLuint shader = glCreateShader(GL_COMPUTE_SHADER);
+        const GLchar *shaderSrc[] = {
+            "#version 450 core\n",
+            "#define FFT_2D\n",
+            s_ComputeShaderSrc
+        };
+
+        // create program
+        gl.program = glCreateProgram();
+
+        // compile and attach shader
+        glShaderSource(shader,
+                       sizeof(shaderSrc) / sizeof(shaderSrc[0]),
+                       shaderSrc,
+                       NULL);
+        glCompileShader(shader);
+        glAttachShader(gl.program, shader);
+        glDeleteShader(shader);
+
+        // link program and setup uniforms
+        glLinkProgram(gl.program);
+        glUseProgram(gl.program);
+        gl.uniformLocations.passID =
+                    glGetUniformLocation(gl.program, "u_PassID");
+        glUniform1f(glGetUniformLocation(gl.program, "u_Dir"), float(dir));
+        glUniform1i(glGetUniformLocation(gl.program, "u_ArgSize"), cnt);
+        glUniform1i(glGetUniformLocation(gl.program, "u_Arg"), 0);
+    }
+
+    // run
+    for (int i = 0; i < msb; ++i) {
+        glUniform1i(gl.uniformLocations.passID, i);
+        glDispatchCompute(cnt, cnt, 1);
+        glMemoryBarrier(GL_ALL_BARRIER_BITS);
+    }
+
+    // retrieve data
+    glGetTexImage(GL_TEXTURE_2D, 0, GL_RG, GL_FLOAT, &xo[0]);
+
+    // cleanup GL state
+    glDeleteProgram(gl.program);
+    glDeleteTextures(1, &gl.texture);
+
+    return xo;
+}
+
+/*
+ * Compute a 3D FFT on the GPU
+ */
+arg<float> eval_3d_gpu(const arg<float> &xi, const e_dir &dir)
+{
+    DJ_ASSERT((xi.size() & (xi.size() - 1)) == 0 && "invalid input size");
+    int cnt3 = (int)xi.size();   // NxNxN
+    int msb = findMSB(cnt3) / 3; // lg2(N) = lg2(cbrt(NxNxN))
+    int cnt = 1 << msb;          // N = 2^lg2(N)
+    float nrm = float(1) / (float(cnt) * std::sqrt(float(cnt)));
+    arg<float> xo(cnt3);
+    struct {
+        GLuint texture, program;
+        struct {GLint passID;} uniformLocations;
+    } gl;
+
+    // pre-process the input data
+    for (int j3 = 0; j3 < cnt; ++j3)
+    for (int j2 = 0; j2 < cnt; ++j2)
+    for (int j1 = 0; j1 < cnt; ++j1) {
+        int k3 = bitr(j3, msb);
+        int k2 = bitr(j2, msb);
+        int k1 = bitr(j1, msb);
+
+        xo[j1 + cnt * (j2 + cnt * j3)] = nrm * xi[k1 + cnt * (k2 + cnt * k3)];
+    }
+
+    // upload data to GPU
+    glGenTextures(1, &gl.texture);
+    glBindTexture(GL_TEXTURE_3D, gl.texture);
+    glTexStorage3D(GL_TEXTURE_3D, 1, GL_RG32F, cnt, cnt, cnt);
+    glTexSubImage3D(GL_TEXTURE_3D, 0, 0, 0, 0, cnt, cnt, cnt,
+                    GL_RG, GL_FLOAT, &xo[0]);
+    glBindImageTexture(0, gl.texture, 0, GL_FALSE, 0, GL_READ_WRITE, GL_RG32F);
+
+    // setup GPU Kernel
+    {
+        GLuint shader = glCreateShader(GL_COMPUTE_SHADER);
+        const GLchar *shaderSrc[] = {
+            "#version 450 core\n",
+            "#define FFT_3D\n",
+            s_ComputeShaderSrc
+        };
+
+        // create program
+        gl.program = glCreateProgram();
+
+        // compile and attach shader
+        glShaderSource(shader,
+                       sizeof(shaderSrc) / sizeof(shaderSrc[0]),
+                       shaderSrc,
+                       NULL);
+        glCompileShader(shader);
+        glAttachShader(gl.program, shader);
+        glDeleteShader(shader);
+
+        // link program and setup uniforms
+        glLinkProgram(gl.program);
+        glUseProgram(gl.program);
+        gl.uniformLocations.passID =
+                    glGetUniformLocation(gl.program, "u_PassID");
+        glUniform1f(glGetUniformLocation(gl.program, "u_Dir"), float(dir));
+        glUniform1i(glGetUniformLocation(gl.program, "u_ArgSize"), cnt);
+        glUniform1i(glGetUniformLocation(gl.program, "u_Arg"), 0);
+    }
+
+    // run
+    for (int i = 0; i < msb; ++i) {
+        glUniform1i(gl.uniformLocations.passID, i);
+        glDispatchCompute(cnt, cnt, cnt);
+        glMemoryBarrier(GL_ALL_BARRIER_BITS);
+    }
+
+    // retrieve data
+    glGetTexImage(GL_TEXTURE_3D, 0, GL_RG, GL_FLOAT, &xo[0]);
+
+    // cleanup GL state
+    glDeleteProgram(gl.program);
+    glDeleteTextures(1, &gl.texture);
+
+    return xo;
+}
+#endif // DJ_FFT_IMPLEMENTATION
 
 } // namespace fft
 } // namespace dj
