@@ -70,7 +70,7 @@ some_function()
 
   // print the data
   for (int i = 0; i < N; ++i) {
-    printf("{%f, %f}\n", fftData[i + N * j].real(), fftData[i + N * j].imag());
+    printf("{%f, %f}\n", fftData[i].real(), fftData[i].imag());
   }
 }
 ```
