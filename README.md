@@ -70,7 +70,7 @@ The following table provides a more comprehensive set of measurements for 2D FFT
 
 The following table provides a more comprehensive set of measurements for 3D FFTs:
 
-| 3D FFT Resolution | 64² | 128² | 256² | 512² |
+| 3D FFT Resolution | 64³ | 128³ | 256³ | 512³ |
 | --- | --- | --- | --- | --- |
 | CPU (i7-8086k) | 0.19s | 1.72s | 15.70s | 141.18s |
 | GPU (RTX 2080) | 0.04s | 0.15s | 1.03s | 8.10s |
