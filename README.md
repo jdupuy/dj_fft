@@ -60,6 +60,22 @@ Additionally, the library provides GPU accelerated 1D, 2D, and 3D FFTs for `std:
 - for an input of size 4096x4096, a regular 2D FFT completes in roughly 18 seconds on an intel i7-8086k, and 0.9 seconds on an NVidia RTX 2080
 - for an input of size 512x512x512, a regular 3D FFT completes in roughly 131 seconds on an intel i7-8086k, and 8.2 seconds on an NVidia RTX 2080
 
+The following table provides a more comprehensive set of measurements for 2D FFTs:
+
+| 2D FFT Resolution | 256² | 512² | 1024² | 2048² | 4096² | 8192² |
+| --- | --- | --- | --- | --- | --- | --- |
+| CPU (i7-8086k) | 0.05s | 0.22s | 0.99s | 4.32s | 18.85s | 81.96s |
+| GPU (RTX 2080) | 0.01s | 0.02s | 0.07s | 0.24s | 0.94s | 3.68s |
+| GPU speed-up | x5 | x11 | x14 | x18 | x20 | x22 |
+
+The following table provides a more comprehensive set of measurements for 3D FFTs:
+
+| 3D FFT Resolution | 64² | 128² | 256² | 512² |
+| --- | --- | --- | --- | --- |
+| CPU (i7-8086k) | 0.19s | 1.72s | 15.70s | 141.18s |
+| GPU (RTX 2080) | 0.04s | 0.15s | 1.03s | 8.10s |
+| GPU speed-up | x5 | x11 | x15 | x17 |
+
 GPU acceleration recquires the user to create an OpenGL4.5 context. This can be achieved with a cross-platform windowing library such as GLFW (https://www.glfw.org/), and an OpenGL function loader such as glad (https://glad.dav1d.de/). To enable the GPU accelerated routines, the user must define the GPU acceleration flag by defining a ``#define DJ_FFT_ENABLE_GPU`` before including the ``dj_fft.h`` file. Below is a C++ pseudocode for computing a 1D FFT in backward direction on the GPU:
 
 ```c++
