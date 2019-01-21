@@ -9,6 +9,7 @@
 #define STB_IMAGE_WRITE_IMPLEMENTATION
 #include "stb_image_write.h"
 
+#define DJ_FFT_IMPLEMENTATION
 #include "dj_fft.h"
 
 static void usage(const char *appName)
