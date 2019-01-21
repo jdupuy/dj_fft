@@ -319,6 +319,7 @@ template <typename T> arg<T> eval_3d(const arg<T> &xi, const e_dir &dir)
 }
 
 #ifdef DJ_FFT_IMPLEMENTATION
+#ifdef DJ_FFT_ENABLE_GPU
 static const char *s_ComputeShaderSrc = {
     "uniform float u_Dir;   // FFT direction\n"
     "uniform int u_ArgSize; // N\n"
@@ -753,6 +754,7 @@ arg<float> eval_3d_gpu(const arg<float> &xi, const e_dir &dir)
 
     return xo;
 }
+#endif // DJ_FFT_ENABLE_GPU
 #endif // DJ_FFT_IMPLEMENTATION
 
 } // namespace fft
