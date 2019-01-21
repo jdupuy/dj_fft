@@ -6,6 +6,18 @@
 ### Details
 This repository provides a header-only library to compute fourier transforms in 1D, 2D, and 3D. Its goal is to provide a fast and easy-to-use fast fourier transform algorithm. 
 
+### Cloning
+
+Clone the repository and all its submodules using the following command:
+```sh
+git clone --recursive git@github.com:jdupuy/dj_fft.git
+```
+
+If you accidentally omitted the `--recursive` flag when cloning the repository you can retrieve the submodules like so:
+```sh
+git submodule update --init --recursive
+```
+
 ### Usage
 The 1D, 2D, and 3D FFT routines return an `std::vector<std::complex<T>>`, given another `std::vector<std::complex<T>>` as input, which specifies the data that must be transformed, as well as an enum class `dj::fft::e_dir`, which specifies in which direction the FFT must be computed (specify `dj::fft::e_dir::DIR_FWD` for the forward direction and `dj::fft::e_dir::DIR_BWD` for the backward direction).
 
