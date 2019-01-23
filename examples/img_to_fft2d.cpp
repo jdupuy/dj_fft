@@ -53,6 +53,7 @@ int main(int argc, char **argv)
     const char *imgFile = nullptr;
     dj::fft::arg<float> imgData, imgDataFFT, imgDataInvFFT;
     std::vector<float> fftInput, fftFwdBwd, fftNrm, fftArg;
+    int size = 0;
 
     for (int i = 1; i < argc; ++i) {
         if (!strcmp("--hdr", argv[i])) {
@@ -88,6 +89,7 @@ int main(int argc, char **argv)
             return 0;
         }
 
+        size = x;
         imgData.resize(x * y);
         for (int j = 0; j < y; ++j)
         for (int i = 0; i < x; ++i)
@@ -103,6 +105,7 @@ int main(int argc, char **argv)
             return 0;
         }
 
+        size = x;
         imgData.resize(x * y);
         for (int j = 0; j < y; ++j)
         for (int i = 0; i < x; ++i)
@@ -118,6 +121,7 @@ int main(int argc, char **argv)
             return 0;
         }
 
+        size = x;
         imgData.resize(x * y);
         for (int j = 0; j < y; ++j)
         for (int i = 0; i < x; ++i)
@@ -141,10 +145,16 @@ int main(int argc, char **argv)
     fftFwdBwd.resize(imgDataFFT.size());
     fftInput.resize(imgDataFFT.size());
 
+    // create spectrum images
     for (int i = 0; i < (int)imgDataFFT.size(); ++i) {
-        fftNrm[i] = std::abs(imgDataFFT[i]);
-        fftArg[i] = std::arg(imgDataFFT[i]);
-        if (fftArg[i] < 0.0f) fftArg[i]+= /*Pi*/std::acos(-1.f);
+        // the spectrum data is shifted by size/2
+        // so that the 0 frequency is located at the center of the image
+        int i1 = (i / size + size / 2) % size;
+        int i2 = (i % size + size / 2) % size;
+        int j = i1 + size * i2;
+        fftNrm[j] = std::abs(imgDataFFT[i]);
+        fftArg[j] = std::arg(imgDataFFT[i]);
+        if (fftArg[j] < 0.0f) fftArg[j]+= /*Pi*/std::acos(-1.f);
 
         // also export input and output for validation
         fftInput[i] = imgData[i].real();
@@ -152,11 +162,10 @@ int main(int argc, char **argv)
     }
 
     // write to .hdr file
-    int x = sqrt(fftNrm.size());
-    stbi_write_hdr("fft_input.hdr", x, x, 1, &fftInput[0]);
-    stbi_write_hdr("fft_fwd_bwd.hdr", x, x, 1, &fftFwdBwd[0]);
-    stbi_write_hdr("fft_nrm.hdr", x, x, 1, &fftNrm[0]);
-    stbi_write_hdr("fft_arg.hdr", x, x, 1, &fftArg[0]);
+    stbi_write_hdr("fft_input.hdr", size, size, 1, &fftInput[0]);
+    stbi_write_hdr("fft_fwd_bwd.hdr", size, size, 1, &fftFwdBwd[0]);
+    stbi_write_hdr("fft_nrm.hdr", size, size, 1, &fftNrm[0]);
+    stbi_write_hdr("fft_arg.hdr", size, size, 1, &fftArg[0]);
 
     return 0;
 }
