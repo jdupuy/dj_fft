@@ -25,6 +25,11 @@ static void usage(const char *appName)
            "        u16 (--u16) for uint16 image data file\n"
            "        hdr (--hdr) for fp32 image data file\n"
            "\n"
+           "\n"
+           "    --device can be either of:\n"
+           "        cpu (--cpu) runs the FFT on the CPU (default)\n"
+           "        gpu (--gpu) runs the FFT on the GPU\n"
+           "\n"
            "[NOTE: for square power-of-two resolution images only!]\n"
            );
 }
@@ -42,10 +47,12 @@ bool check_image(int x, int y)
 int main(int argc, char **argv)
 {
     enum {FORMAT_UINT8, FORMAT_UINT16, FORMAT_HDR};
+    enum {DEVICE_CPU, DEVICE_GPU};
     int format = FORMAT_UINT8;
+    int device = DEVICE_CPU;
     const char *imgFile = nullptr;
-    dj::fft::arg<float> imgData, imgDataFFT;
-    std::vector<float> fftNrm, fftArg;
+    dj::fft::arg<float> imgData, imgDataFFT, imgDataInvFFT;
+    std::vector<float> fftInput, fftFwdBwd, fftNrm, fftArg;
 
     for (int i = 1; i < argc; ++i) {
         if (!strcmp("--hdr", argv[i])) {
@@ -54,6 +61,10 @@ int main(int argc, char **argv)
             format = FORMAT_UINT16;
         } else if (!strcmp("--u8", argv[i])) {
             format = FORMAT_UINT8;
+        } else if (!strcmp("--cpu", argv[i])) {
+            device = DEVICE_CPU;
+        } else if (!strcmp("--gpu", argv[i])) {
+            device = DEVICE_GPU;
         } else if (!strcmp("--help", argv[i])) {
             usage(argv[0]);
             return 0;
@@ -115,21 +126,35 @@ int main(int argc, char **argv)
         stbi_image_free((unsigned char *)texels);
     }
 
-    // compute FFT:
-    imgDataFFT = dj::fft::eval_2d(imgData, dj::fft::e_dir::DIR_FWD);
+    // compute FFT and inverse FFT on the CPU or the GPU
+    if (device == DEVICE_CPU) {
+        imgDataFFT = dj::fft::eval_2d(imgData, dj::fft::e_dir::DIR_FWD);
+        imgDataInvFFT = dj::fft::eval_2d(imgDataFFT, dj::fft::e_dir::DIR_BWD);
+    } else if (device == DEVICE_GPU) {
+        imgDataFFT = dj::fft::eval_2d_gpu(imgData, dj::fft::e_dir::DIR_FWD);
+        imgDataInvFFT = dj::fft::eval_2d_gpu(imgDataFFT, dj::fft::e_dir::DIR_BWD);
+    }
 
     // build norm array and phase array
     fftNrm.resize(imgDataFFT.size());
     fftArg.resize(imgDataFFT.size());
+    fftFwdBwd.resize(imgDataFFT.size());
+    fftInput.resize(imgDataFFT.size());
 
     for (int i = 0; i < (int)imgDataFFT.size(); ++i) {
         fftNrm[i] = std::abs(imgDataFFT[i]);
         fftArg[i] = std::arg(imgDataFFT[i]);
         if (fftArg[i] < 0.0f) fftArg[i]+= /*Pi*/std::acos(-1.f);
+
+        // also export input and output for validation
+        fftInput[i] = imgData[i].real();
+        fftFwdBwd[i] = imgDataInvFFT[i].real();
     }
 
     // write to .hdr file
     int x = sqrt(fftNrm.size());
+    stbi_write_hdr("fft_input.hdr", x, x, 1, &fftInput[0]);
+    stbi_write_hdr("fft_fwd_bwd.hdr", x, x, 1, &fftFwdBwd[0]);
     stbi_write_hdr("fft_nrm.hdr", x, x, 1, &fftNrm[0]);
     stbi_write_hdr("fft_arg.hdr", x, x, 1, &fftArg[0]);
 
