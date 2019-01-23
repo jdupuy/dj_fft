@@ -79,7 +79,6 @@ The following table provides a more comprehensive set of measurements for 3D FFT
 Below is a C++ pseudocode for computing a 1D FFT in backward direction on the GPU:
 
 ```c++
-#define DJ_FFT_ENABLE_GPU // enables GPU acceleration
 #define DJ_FFT_IMPLEMENTATION // define this in exactly *one* .cpp file
 #include "dj_fft.h"
 
