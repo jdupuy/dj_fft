@@ -1,12 +1,7 @@
-
-#include "glad/glad.h"
-#include "GLFW/glfw3.h"
 #include <cstdio>
 #include <cstdlib>
 #include <algorithm>
 #include <chrono>
-
-#define DJ_FFT_ENABLE_GPU // enable GPU FFT
 
 #define DJ_FFT_IMPLEMENTATION
 #include "dj_fft.h"
@@ -20,32 +15,10 @@ float rng()
 
 int main(int argc, char **argv)
 {
-    // create an OpenGL context
-    glfwInit();
-    glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 4);
-    glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 5);
-    glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
-    glfwWindowHint(GLFW_VISIBLE, GLFW_FALSE);
-    glfwWindowHint(GLFW_OPENGL_DEBUG_CONTEXT, GL_TRUE);
-
-    GLFWwindow* window = glfwCreateWindow(128, 128, "dj_fft", NULL, NULL);
-    if (window == NULL) {
-        printf("OpenGL window creation failed!\n");
-        glfwTerminate();
-        return -1;
-    }
-    glfwMakeContextCurrent(window);
-
-    // Load OpenGL functions
-    if (!gladLoadGLLoader((GLADloadproc)glfwGetProcAddress)) {
-        printf("window creation failed!\n");
-        return -1;
-    }
-
 #if 1 // perform a 1D FFT
     {
         srand(1234);
-        int cnt = 8192;
+        int cnt = 16;
         dj::fft::arg<float> xi;
 
         for (int i = 0; i < cnt; ++i)
@@ -63,7 +36,7 @@ int main(int argc, char **argv)
         std::chrono::duration<double> d2 = s4 - s3;
         printf("=> [%i] GPU: %f s\n", cnt, d2.count()); fflush(stdout);
 
-#if 0 // display content
+#if 1 // display content
     for (int i = 0; i < cpu.size(); ++i) {
         printf("{%f %f} vs {%f %f}\n",
                cpu[i].real(), cpu[i].imag(),
@@ -76,7 +49,7 @@ int main(int argc, char **argv)
 #if 1 // perform a 2D FFT
     {
         srand(3234);
-        int cnt = 4096;
+        int cnt = 8;
         dj::fft::arg<float> xi;
 
         for (int i = 0; i < cnt * cnt; ++i)
@@ -94,7 +67,7 @@ int main(int argc, char **argv)
         std::chrono::duration<double> d2 = s4 - s3;
         printf("=> [%i^2] GPU: %f s\n", cnt, d2.count()); fflush(stdout);
 
-#if 0 // display content
+#if 1 // display content
         for (int j = 0; j < cnt; ++j) {
             for (int i = 0; i < cnt; ++i) {
                 printf("{%f %f} vs {%f %f}\n",
@@ -110,7 +83,7 @@ int main(int argc, char **argv)
 #if 1 // perform a 3D FFT
     {
         srand(3234);
-        int cnt = 512;
+        int cnt = 4;
         dj::fft::arg<float> xi;
 
         for (int i = 0; i < (cnt * cnt * cnt); ++i)
@@ -128,7 +101,7 @@ int main(int argc, char **argv)
         std::chrono::duration<double> d2 = s4 - s3;
         printf("=> [%i^3] GPU: %f s\n", cnt, d2.count()); fflush(stdout);
 
-#if 0 // display content
+#if 1 // display content
         for (int k = 0; k < cnt; ++k) {
             for (int i = 0; i < cnt; ++i) {
                 for (int j = 0; j < cnt; ++j) {
@@ -143,8 +116,6 @@ int main(int argc, char **argv)
 #endif
     }
 #endif
-
-    glfwTerminate();
 
     return 0;
 }
