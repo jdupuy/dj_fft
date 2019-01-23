@@ -28,12 +28,15 @@ namespace fft {
     template <typename T> arg<T> eval_2d(const arg<T> &xi, const e_dir &dir);
     template <typename T> arg<T> eval_3d(const arg<T> &xi, const e_dir &dir);
 
-#ifdef DJ_FFT_ENABLE_GPU
     // GPU FFT routines (float precision only)
     arg<float> eval_1d_gpu(const arg<float> &xi, const e_dir &dir);
     arg<float> eval_2d_gpu(const arg<float> &xi, const e_dir &dir);
     arg<float> eval_3d_gpu(const arg<float> &xi, const e_dir &dir);
-#endif
+
+    // GPU FFT routines (for advanced users: create an OpenGL context yourself)
+    arg<float> eval_1d_gpu_glready(const arg<float> &xi, const e_dir &dir);
+    arg<float> eval_2d_gpu_glready(const arg<float> &xi, const e_dir &dir);
+    arg<float> eval_3d_gpu_glready(const arg<float> &xi, const e_dir &dir);
 } // namespace fft
 } // namespace dj
 
@@ -318,9 +321,208 @@ template <typename T> arg<T> eval_3d(const arg<T> &xi, const e_dir &dir)
     return xo;
 }
 
+} // namespace fft
+} // namespace dj
+
+//
+//
+//// end inline file ///////////////////////////////////////////////////////////
+#endif // DJ_INCLUDE_FFT_H
+
 #ifdef DJ_FFT_IMPLEMENTATION
-#ifdef DJ_FFT_ENABLE_GPU
-static const char *s_ComputeShaderSrc = {
+
+/* declare GL types */
+#include <cstddef>
+typedef char            GLchar;
+typedef unsigned int    GLenum;
+typedef unsigned char   GLboolean;
+typedef unsigned int    GLbitfield;
+typedef void            GLvoid;
+typedef signed char     GLbyte;   /* 1-byte signed */
+typedef short           GLshort;  /* 2-byte signed */
+typedef int             GLint;    /* 4-byte signed */
+typedef unsigned char   GLubyte;  /* 1-byte unsigned */
+typedef unsigned short  GLushort; /* 2-byte unsigned */
+typedef unsigned int    GLuint;   /* 4-byte unsigned */
+typedef int             GLsizei;  /* 4-byte signed */
+typedef float           GLfloat;  /* single precision float */
+typedef float           GLclampf; /* single precision float in [0,1] */
+typedef double          GLdouble; /* double precision float */
+typedef double          GLclampd; /* double precision float in [0,1] */
+typedef std::ptrdiff_t GLintptr;
+typedef std::ptrdiff_t GLsizeiptr;
+
+/* platform-specific includes */
+#ifdef _WIN32
+#   define NOMINMAX
+#   define WIN32_LEAN_AND_MEAN
+#   include <windows.h>
+#   define GLAPI WINGDIAPI
+#   define GLAPIENTRY WINAPI
+#else
+#   define __gl_h_
+#   define GLAPI
+#   define GLAPIENTRY
+#   include <X11/Xlib.h>
+#   include <GL/glx.h>
+#endif
+
+namespace dj {
+namespace fft {
+
+/* GL functions dependencies */
+#define DJGL_LIST \
+    /*  ret, name, params */ \
+    GLE(void,      LinkProgram,          GLuint program) \
+    GLE(GLuint,    CreateShader,         GLenum type) \
+    GLE(void,      ShaderSource,         GLuint shader, GLsizei count, const GLchar* const *string, const GLint *length) \
+    GLE(void,      CompileShader,        GLuint shader) \
+    GLE(void,      DeleteShader,         GLuint shader) \
+    GLE(GLuint,    CreateProgram,        void) \
+    GLE(void,      AttachShader,         GLuint program, GLuint shader) \
+    GLE(void,      UseProgram,           GLuint program) \
+    GLE(void,      DeleteProgram,        GLuint program) \
+    GLE(void,      Uniform1i,            GLint location, GLint v0) \
+    GLE(void,      Uniform1f,            GLint location, GLfloat v0) \
+    GLE(int,       GetUniformLocation,   GLuint program, const GLchar *name) \
+    GLE(void,      TexStorage1D,         GLenum target, GLsizei levels, GLenum internalformat, GLsizei width) \
+    GLE(void,      TexStorage2D,         GLenum target, GLsizei levels, GLenum internalformat, GLsizei width, GLsizei height) \
+    GLE(void,      TexStorage3D,         GLenum target, GLsizei levels, GLenum internalformat, GLsizei width, GLsizei height, GLsizei depth) \
+    GLE(void,      BindImageTexture,     GLuint unit, GLuint texture, GLint level, GLboolean layered, GLint layer, GLenum access, GLenum format) \
+    GLE(void,      DispatchCompute,      GLuint num_groups_x, GLuint num_groups_y, GLuint num_groups_z) \
+    GLE(void,      MemoryBarrier,        GLbitfield barriers) \
+    GLE(void,      GenTextures,          GLsizei n, GLuint *textures) \
+    GLE(void,      DeleteTextures,       GLsizei n, GLuint *textures) \
+    GLE(void,      BindTexture,          GLenum target, GLuint texture) \
+    GLE(void,      TexSubImage1D,        GLenum target, GLint level, GLint xoffset, GLsizei width, GLenum format, GLsizei imageSize, const void *data) \
+    GLE(void,      TexSubImage2D,        GLenum target, GLint level, GLint xoffset, GLint yoffset, GLsizei width, GLsizei height, GLenum format, GLenum type, const void *pixels) \
+    GLE(void,      TexSubImage3D,        GLenum target, GLint level, GLint xoffset, GLint yoffset, GLint zoffset, GLsizei width, GLsizei height, GLsizei depth, GLenum format, GLenum type, const void *pixels) \
+    GLE(void,      GetTexImage,          GLenum target, GLint level, GLenum format, GLenum type, void *pixels) \
+
+/* declare GL enums */
+#define GL_COMPUTE_SHADER   0x91B9
+#define GL_TEXTURE_1D       0x0DE0
+#define GL_TEXTURE_2D       0x0DE1
+#define GL_TEXTURE_3D       0x806F
+#define GL_RG32F            0x8230
+#define GL_RG               0x8227
+#define GL_READ_WRITE       0x88BA
+#define GL_FLOAT            0x1406
+#define GL_ALL_BARRIER_BITS 0xFFFFFFFF
+#define GL_FALSE    0
+#define GL_TRUE     1
+
+/* declare OpenGL functions */
+#define GLE(ret, name, ...) typedef ret GLAPIENTRY name##Proc(__VA_ARGS__); static name##Proc *gl##name;
+DJGL_LIST
+#undef GLE
+
+/* load a specific function */
+void *procLoad(const char *proc) {
+#if _WIN32
+    void *ptr = (void *)wglGetProcAddress((LPCSTR) proc);
+
+    if (!ptr) {
+        HMODULE module = LoadLibraryA("opengl32.dll");
+        ptr = (void *)GetProcAddress(module, (LPCSTR)proc);
+    }
+
+    return ptr;
+#else
+    return (void *) glXGetProcAddress((const GLubyte *)proc);
+#endif
+}
+
+/* load OpenGL functions */
+void glLoad()
+{
+#define GLE(ret, name, ...) \
+    gl##name = (name##Proc *)procLoad("gl" #name); \
+    if (!gl##name) { \
+        printf("could not load gl" #name "\n"); \
+    }
+DJGL_LIST
+#undef GLE
+}
+/* Context Manager */
+class OpenGLContext {
+public:
+    OpenGLContext() {
+#ifdef _WIN32
+        HINSTANCE hinstance = GetModuleHandleW(NULL);
+        WNDCLASS wc = { 0 };
+            wc.lpfnWndProc = DefWindowProc;
+            wc.hInstance = GetModuleHandleW(NULL);
+            wc.hbrBackground = (HBRUSH)(COLOR_BACKGROUND);
+            wc.lpszClassName = (LPCSTR)"x";
+            wc.style = CS_OWNDC;
+            RegisterClass(&wc);
+
+        // Create window
+        HWND hwnd = CreateWindowEx(
+            WS_EX_CLIENTEDGE,
+            "x",
+            "x",
+            WS_OVERLAPPEDWINDOW,
+            CW_USEDEFAULT, CW_USEDEFAULT, 240, 120,
+            NULL, NULL, hinstance, NULL
+        );
+        hdc = GetDC(hwnd);
+        PIXELFORMATDESCRIPTOR pfd = {
+             sizeof(PIXELFORMATDESCRIPTOR),
+             1,
+             PFD_SUPPORT_OPENGL,
+             PFD_TYPE_RGBA,
+             16,
+             0, 0, 0, 0, 0, 0,
+             0,
+             0,
+             0,
+             0, 0, 0, 0,
+             16,
+             0,
+             0,
+             PFD_MAIN_PLANE,
+             0,
+             0, 0, 0
+        };
+            SetPixelFormat(hdc, ChoosePixelFormat(hdc, &pfd), &pfd);
+        hglrc = wglCreateContext(hdc);
+
+        wglMakeCurrent(hdc, hglrc);
+#else
+        dpy = XOpenDisplay(NULL);
+        int dummy; GLXFBConfig cfg = glXGetFBConfigs(dpy, 0, &dummy)[0];
+        pbuf = glXCreatePbuffer(dpy, cfg, NULL);
+        ctx = glXCreateNewContext(dpy, cfg, GLX_RGBA_TYPE, 0, True);
+
+        glXMakeCurrent(dpy, None, ctx);
+#endif
+        glLoad();
+    }
+
+    ~OpenGLContext() {
+#ifdef _WIN32
+        wglMakeCurrent(hdc, NULL);
+        wglDeleteContext(hglrc);
+#else
+        glXDestroyContext(dpy, ctx);
+        glXDestroyPbuffer(dpy, pbuf);
+        XCloseDisplay(dpy);
+#endif
+    }
+private:
+#ifdef _WIN32
+    HDC   hdc;
+    HGLRC hglrc;
+#else
+    Display *dpy;
+    GLXPbuffer pbuf;
+    GLXContext ctx;
+#endif
+};
+
+static const char s_ComputeShaderSrc[] = {
     "uniform float u_Dir;   // FFT direction\n"
     "uniform int u_ArgSize; // N\n"
     "uniform int u_PassID;  // pass number in [0, lg2(N))\n\n"
@@ -521,7 +723,13 @@ static const char *s_ComputeShaderSrc = {
 /*
  * Compute a 1D FFT on the GPU
  */
-arg<float> eval_1d_gpu(const arg<float> &xi, const e_dir &dir)
+arg<float> eval_1d_gpu(const arg<float> &xi, const e_dir &dir) {
+    OpenGLContext ctx; // load OpenGL context
+
+    return eval_1d_gpu_glready(xi, dir);
+}
+
+arg<float> eval_1d_gpu_glready(const arg<float> &xi, const e_dir &dir)
 {
     DJ_ASSERT((xi.size() & (xi.size() - 1)) == 0 && "invalid input size");
     int cnt = (int)xi.size();
@@ -595,7 +803,13 @@ arg<float> eval_1d_gpu(const arg<float> &xi, const e_dir &dir)
 /*
  * Compute a 2D FFT on the GPU
  */
-arg<float> eval_2d_gpu(const arg<float> &xi, const e_dir &dir)
+arg<float> eval_2d_gpu(const arg<float> &xi, const e_dir &dir) {
+    OpenGLContext ctx; // load OpenGL context
+
+    return eval_2d_gpu_glready(xi, dir);
+}
+
+arg<float> eval_2d_gpu_glready(const arg<float> &xi, const e_dir &dir)
 {
     DJ_ASSERT((xi.size() & (xi.size() - 1)) == 0 && "invalid input size");
     int cnt2 = (int)xi.size();   // NxN
@@ -675,7 +889,13 @@ arg<float> eval_2d_gpu(const arg<float> &xi, const e_dir &dir)
 /*
  * Compute a 3D FFT on the GPU
  */
-arg<float> eval_3d_gpu(const arg<float> &xi, const e_dir &dir)
+arg<float> eval_3d_gpu(const arg<float> &xi, const e_dir &dir) {
+    OpenGLContext ctx; // load OpenGL context
+
+    return eval_3d_gpu_glready(xi, dir);
+}
+
+arg<float> eval_3d_gpu_glready(const arg<float> &xi, const e_dir &dir)
 {
     DJ_ASSERT((xi.size() & (xi.size() - 1)) == 0 && "invalid input size");
     int cnt3 = (int)xi.size();   // NxNxN
@@ -754,10 +974,13 @@ arg<float> eval_3d_gpu(const arg<float> &xi, const e_dir &dir)
 
     return xo;
 }
-#endif // DJ_FFT_ENABLE_GPU
-#endif // DJ_FFT_IMPLEMENTATION
+
+// disable macro protection on linux
+#ifndef _WIN32
+#   undef __gl_h_
+#endif
 
 } // namespace fft
 } // namespace dj
+#endif // DJ_FFT_IMPLEMENTATION
 
-#endif // DJ_INCLUDE_FFT_H
