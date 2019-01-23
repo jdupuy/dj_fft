@@ -76,7 +76,7 @@ The following table provides a more comprehensive set of measurements for 3D FFT
 | GPU (RTX 2080) | 0.04s | 0.15s | 1.03s | 8.10s |
 | GPU speed-up | x5 | x11 | x15 | x17 |
 
-GPU acceleration recquires the user to create an OpenGL4.5 context. This can be achieved with a cross-platform windowing library such as GLFW (https://www.glfw.org/), and an OpenGL function loader such as glad (https://glad.dav1d.de/). To enable the GPU accelerated routines, the user must define the GPU acceleration flag by defining a ``#define DJ_FFT_ENABLE_GPU`` before including the ``dj_fft.h`` file. Below is a C++ pseudocode for computing a 1D FFT in backward direction on the GPU:
+Below is a C++ pseudocode for computing a 1D FFT in backward direction on the GPU:
 
 ```c++
 #define DJ_FFT_ENABLE_GPU // enables GPU acceleration
@@ -104,7 +104,10 @@ some_function()
 ```
 Note that the return values of a GPU FFT may differ slightly from that of a regular FFT, due to the way floating point arithmetic is implemented.
 
-For a complete example that compiles, see the examples/ directory. 
+For a complete example that compiles, see the examples/ directory.
+
+### GPU Acceleration (Advanced)
+By default, the GPU accelerated routines run on the primary GPU. Users who want to run the FFT on a secondary GPU will have to create an OpenGL context themselves and use the `eval_gpu_glready` functions. Creating a custom OpenGL context with a cross-platform windowing library such as GLFW (https://www.glfw.org/), and an OpenGL function loader such as glad (https://glad.dav1d.de/).  
 
 ### License
 The code from this repository is released in public domain.
