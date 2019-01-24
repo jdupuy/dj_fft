@@ -432,7 +432,7 @@ void *procLoad(const char *proc) {
 
     return ptr;
 #else
-    return (void *) glXGetProcAddress((const GLubyte *)proc);
+    return (void *)glXGetProcAddress((const GLubyte *)proc);
 #endif
 }
 
