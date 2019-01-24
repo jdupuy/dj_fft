@@ -115,7 +115,7 @@ template <typename T> arg<T> eval_1d(const arg<T> &xi, const e_dir &dir)
     DJ_ASSERT((xi.size() & (xi.size() - 1)) == 0 && "invalid input size");
     int cnt = (int)xi.size();
     int msb = findMSB(cnt);
-    T nrm = T(1) / std::sqrt(cnt);
+    T nrm = T(1) / std::sqrt(T(cnt));
     arg<T> xo(cnt);
 
     // pre-process the input data
@@ -738,7 +738,7 @@ arg<float> eval_1d_gpu_glready(const arg<float> &xi, const e_dir &dir)
     DJ_ASSERT((xi.size() & (xi.size() - 1)) == 0 && "invalid input size");
     int cnt = (int)xi.size();
     int msb = findMSB(cnt);
-    float nrm = float(1) / std::sqrt(cnt);
+    float nrm = float(1) / std::sqrt(float(cnt));
     arg<float> xo(cnt);
     struct {
         GLuint texture, program;
