@@ -359,6 +359,9 @@ typedef std::ptrdiff_t GLsizeiptr;
 #   include <windows.h>
 #   define GLAPI WINGDIAPI
 #   define GLAPIENTRY WINAPI
+#   ifdef _MSC_VER
+#       pragma comment(lib, "OpenGL32.lib")
+#   endif
 #else
 #   define __gl_h_
 #   define GLAPI
@@ -450,19 +453,20 @@ public:
     OpenGLContext() {
 #ifdef _WIN32
         HINSTANCE hinstance = GetModuleHandleW(NULL);
-        WNDCLASS wc = { 0 };
+        LPCSTR windowClassName = (LPCSTR)"dj";
+        WNDCLASSA wc = { 0 };
             wc.lpfnWndProc = DefWindowProc;
             wc.hInstance = GetModuleHandleW(NULL);
             wc.hbrBackground = (HBRUSH)(COLOR_BACKGROUND);
-            wc.lpszClassName = (LPCSTR)"x";
+            wc.lpszClassName = windowClassName;
             wc.style = CS_OWNDC;
-            RegisterClass(&wc);
+            RegisterClassA(&wc);
 
         // Create window
-        HWND hwnd = CreateWindowEx(
+        HWND hwnd = CreateWindowExA(
             WS_EX_CLIENTEDGE,
-            "x",
-            "x",
+            windowClassName,
+            windowClassName,
             WS_OVERLAPPEDWINDOW,
             CW_USEDEFAULT, CW_USEDEFAULT, 240, 120,
             NULL, NULL, hinstance, NULL
