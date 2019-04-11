@@ -106,7 +106,7 @@ Note that the return values of a GPU FFT may differ slightly from that of a regu
 For a complete example that compiles, see the examples/ directory.
 
 ### GPU Acceleration (Advanced)
-By default, the GPU accelerated routines run on the primary GPU. Users who want to run the FFT on a secondary GPU will have to create an OpenGL context themselves and use the `eval_gpu_glready` functions. You can create a custom OpenGL context with a cross-platform windowing library such as GLFW (https://www.glfw.org/), and an OpenGL function loader such as glad (https://glad.dav1d.de/). I'll probably add a sample at some point.
+By default, the GPU accelerated routines run on the primary GPU. Users who want to run the FFT on a secondary GPU will have to create an OpenGL context themselves and use the `fftNd_gpu_glready` functions. You can create a custom OpenGL context with a cross-platform windowing library such as GLFW (https://www.glfw.org/), and an OpenGL function loader such as glad (https://glad.dav1d.de/). I'll probably add a sample at some point.
 
 ### License
 The code from this repository is released in public domain.
