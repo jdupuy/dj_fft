@@ -41,7 +41,7 @@ some_function()
   }
 
   // compute forward 2D FFT
-  auto fftData = dj::fft::eval_2d(myData, dj::fft::e_dir::FFT_FWD);
+  auto fftData = dj::fft2d(myData, dj::fft_dir::FFT_FWD);
 
   // print the data
   for (int j = 0; j < N; ++j) {
@@ -93,7 +93,7 @@ some_function()
   }
 
   // compute backward 1D FFT
-  auto fftData = dj::fft::eval_1d_gpu(myData, dj::fft::e_dir::FFT_BWD);
+  auto fftData = dj::fft1d_gpu(myData, dj::fft_dir::FFT_BWD);
 
   // print the data
   for (int i = 0; i < N; ++i) {

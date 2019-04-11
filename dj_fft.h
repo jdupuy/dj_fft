@@ -16,28 +16,28 @@ by Jonathan Dupuy
 #include <vector>  // std::vector
 
 namespace dj {
-namespace fft {
-    // FFT argument: std::vector<std::complex>
-    template <typename T> using arg = std::vector<std::complex<T>>;
 
-    // FFT direction specifier
-    enum class e_dir {DIR_FWD = +1, DIR_BWD = -1};
+// FFT argument: std::vector<std::complex>
+template <typename T> using fft_arg = std::vector<std::complex<T>>;
 
-    // FFT routines
-    template <typename T> arg<T> eval_1d(const arg<T> &xi, const e_dir &dir);
-    template <typename T> arg<T> eval_2d(const arg<T> &xi, const e_dir &dir);
-    template <typename T> arg<T> eval_3d(const arg<T> &xi, const e_dir &dir);
+// FFT direction specifier
+enum class fft_dir {DIR_FWD = +1, DIR_BWD = -1};
 
-    // GPU FFT routines (float precision only)
-    arg<float> eval_1d_gpu(const arg<float> &xi, const e_dir &dir);
-    arg<float> eval_2d_gpu(const arg<float> &xi, const e_dir &dir);
-    arg<float> eval_3d_gpu(const arg<float> &xi, const e_dir &dir);
+// FFT routines
+template<typename T> fft_arg<T> fft1d(const fft_arg<T> &xi, const fft_dir &dir);
+template<typename T> fft_arg<T> fft2d(const fft_arg<T> &xi, const fft_dir &dir);
+template<typename T> fft_arg<T> fft3d(const fft_arg<T> &xi, const fft_dir &dir);
 
-    // GPU FFT routines (for advanced users: create an OpenGL context yourself)
-    arg<float> eval_1d_gpu_glready(const arg<float> &xi, const e_dir &dir);
-    arg<float> eval_2d_gpu_glready(const arg<float> &xi, const e_dir &dir);
-    arg<float> eval_3d_gpu_glready(const arg<float> &xi, const e_dir &dir);
-} // namespace fft
+// GPU FFT routines (float precision only)
+fft_arg<float> fft1d_gpu(const fft_arg<float> &xi, const fft_dir &dir);
+fft_arg<float> fft2d_gpu(const fft_arg<float> &xi, const fft_dir &dir);
+fft_arg<float> fft3d_gpu(const fft_arg<float> &xi, const fft_dir &dir);
+
+// GPU FFT routines (for advanced users: create an OpenGL context yourself)
+fft_arg<float> fft1d_gpu_glready(const fft_arg<float> &xi, const fft_dir &dir);
+fft_arg<float> fft2d_gpu_glready(const fft_arg<float> &xi, const fft_dir &dir);
+fft_arg<float> fft3d_gpu_glready(const fft_arg<float> &xi, const fft_dir &dir);
+
 } // namespace dj
 
 //
@@ -55,7 +55,6 @@ namespace fft {
 #endif
 
 namespace dj {
-namespace fft {
 
 constexpr auto Pi = 3.141592653589793238462643383279502884;
 
@@ -110,13 +109,13 @@ int bitr(uint32_t x, int nb)
  *
  * NOTE: Only works for arrays whose size is a power-of-two
  */
-template <typename T> arg<T> eval_1d(const arg<T> &xi, const e_dir &dir)
+template <typename T> fft_arg<T> fft1d(const fft_arg<T> &xi, const fft_dir &dir)
 {
     DJ_ASSERT((xi.size() & (xi.size() - 1)) == 0 && "invalid input size");
     int cnt = (int)xi.size();
     int msb = findMSB(cnt);
     T nrm = T(1) / std::sqrt(T(cnt));
-    arg<T> xo(cnt);
+    fft_arg<T> xo(cnt);
 
     // pre-process the input data
     for (int j = 0; j < cnt; ++j)
@@ -151,14 +150,14 @@ template <typename T> arg<T> eval_1d(const arg<T> &xi, const e_dir &dir)
  *
  * NOTE: the input must be a square matrix whose size is a power-of-two
  */
-template <typename T> arg<T> eval_2d(const arg<T> &xi, const e_dir &dir)
+template <typename T> fft_arg<T> fft2d(const fft_arg<T> &xi, const fft_dir &dir)
 {
     DJ_ASSERT((xi.size() & (xi.size() - 1)) == 0 && "invalid input size");
     int cnt2 = (int)xi.size();   // NxN
     int msb = findMSB(cnt2) / 2; // lg2(N) = lg2(sqrt(NxN))
     int cnt = 1 << msb;          // N = 2^lg2(N)
     T nrm = T(1) / T(cnt);
-    arg<T> xo(cnt2);
+    fft_arg<T> xo(cnt2);
 
     // pre-process the input data
     for (int j2 = 0; j2 < cnt; ++j2)
@@ -220,14 +219,14 @@ template <typename T> arg<T> eval_2d(const arg<T> &xi, const e_dir &dir)
  *
  * NOTE: the input must be a square matrix whose size is a power-of-two
  */
-template <typename T> arg<T> eval_3d(const arg<T> &xi, const e_dir &dir)
+template <typename T> fft_arg<T> fft3d(const fft_arg<T> &xi, const fft_dir &dir)
 {
     DJ_ASSERT((xi.size() & (xi.size() - 1)) == 0 && "invalid input size");
     int cnt3 = (int)xi.size();   // NxNxN
     int msb = findMSB(cnt3) / 3; // lg2(N) = lg2(cbrt(NxNxN))
     int cnt = 1 << msb;          // N = 2^lg2(N)
     T nrm = T(1) / (T(cnt) * std::sqrt(T(cnt)));
-    arg<T> xo(cnt3);
+    fft_arg<T> xo(cnt3);
 
     // pre-process the input data
     for (int j3 = 0; j3 < cnt; ++j3)
@@ -321,7 +320,6 @@ template <typename T> arg<T> eval_3d(const arg<T> &xi, const e_dir &dir)
     return xo;
 }
 
-} // namespace fft
 } // namespace dj
 
 //
@@ -371,7 +369,6 @@ typedef std::ptrdiff_t GLsizeiptr;
 #endif
 
 namespace dj {
-namespace fft {
 
 /* GL functions dependencies */
 #define DJGL_LIST \
@@ -727,19 +724,19 @@ static const char s_ComputeShaderSrc[] = {
 /*
  * Compute a 1D FFT on the GPU
  */
-arg<float> eval_1d_gpu(const arg<float> &xi, const e_dir &dir) {
+fft_arg<float> fft1d_gpu(const fft_arg<float> &xi, const fft_dir &dir) {
     OpenGLContext ctx; // load OpenGL context
 
-    return eval_1d_gpu_glready(xi, dir);
+    return fft1d_gpu_glready(xi, dir);
 }
 
-arg<float> eval_1d_gpu_glready(const arg<float> &xi, const e_dir &dir)
+fft_arg<float> fft1d_gpu_glready(const fft_arg<float> &xi, const fft_dir &dir)
 {
     DJ_ASSERT((xi.size() & (xi.size() - 1)) == 0 && "invalid input size");
     int cnt = (int)xi.size();
     int msb = findMSB(cnt);
     float nrm = float(1) / std::sqrt(float(cnt));
-    arg<float> xo(cnt);
+    fft_arg<float> xo(cnt);
     struct {
         GLuint texture, program;
         struct {GLint passID;} uniformLocations;
@@ -807,20 +804,20 @@ arg<float> eval_1d_gpu_glready(const arg<float> &xi, const e_dir &dir)
 /*
  * Compute a 2D FFT on the GPU
  */
-arg<float> eval_2d_gpu(const arg<float> &xi, const e_dir &dir) {
+fft_arg<float> fft2d_gpu(const fft_arg<float> &xi, const fft_dir &dir) {
     OpenGLContext ctx; // load OpenGL context
 
-    return eval_2d_gpu_glready(xi, dir);
+    return fft2d_gpu_glready(xi, dir);
 }
 
-arg<float> eval_2d_gpu_glready(const arg<float> &xi, const e_dir &dir)
+fft_arg<float> fft2d_gpu_glready(const fft_arg<float> &xi, const fft_dir &dir)
 {
     DJ_ASSERT((xi.size() & (xi.size() - 1)) == 0 && "invalid input size");
     int cnt2 = (int)xi.size();   // NxN
     int msb = findMSB(cnt2) / 2; // lg2(N) = lg2(sqrt(NxN))
     int cnt = 1 << msb;          // N = 2^lg2(N)
     float nrm = float(1) / float(cnt);
-    arg<float> xo(cnt2);
+    fft_arg<float> xo(cnt2);
     struct {
         GLuint texture, program;
         struct {GLint passID;} uniformLocations;
@@ -893,20 +890,20 @@ arg<float> eval_2d_gpu_glready(const arg<float> &xi, const e_dir &dir)
 /*
  * Compute a 3D FFT on the GPU
  */
-arg<float> eval_3d_gpu(const arg<float> &xi, const e_dir &dir) {
+fft_arg<float> fft3d_gpu(const fft_arg<float> &xi, const fft_dir &dir) {
     OpenGLContext ctx; // load OpenGL context
 
-    return eval_3d_gpu_glready(xi, dir);
+    return fft3d_gpu_glready(xi, dir);
 }
 
-arg<float> eval_3d_gpu_glready(const arg<float> &xi, const e_dir &dir)
+fft_arg<float> fft3d_gpu_glready(const fft_arg<float> &xi, const fft_dir &dir)
 {
     DJ_ASSERT((xi.size() & (xi.size() - 1)) == 0 && "invalid input size");
     int cnt3 = (int)xi.size();   // NxNxN
     int msb = findMSB(cnt3) / 3; // lg2(N) = lg2(cbrt(NxNxN))
     int cnt = 1 << msb;          // N = 2^lg2(N)
     float nrm = float(1) / (float(cnt) * std::sqrt(float(cnt)));
-    arg<float> xo(cnt3);
+    fft_arg<float> xo(cnt3);
     struct {
         GLuint texture, program;
         struct {GLint passID;} uniformLocations;
@@ -984,7 +981,6 @@ arg<float> eval_3d_gpu_glready(const arg<float> &xi, const e_dir &dir)
 #   undef __gl_h_
 #endif
 
-} // namespace fft
 } // namespace dj
 #endif // DJ_FFT_IMPLEMENTATION
 

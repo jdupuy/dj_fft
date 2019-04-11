@@ -51,7 +51,7 @@ int main(int argc, char **argv)
     int format = FORMAT_UINT8;
     int device = DEVICE_CPU;
     const char *imgFile = nullptr;
-    dj::fft::arg<float> imgData, imgDataFFT, imgDataInvFFT;
+    dj::fft_arg<float> imgData, imgDataFFT, imgDataInvFFT;
     std::vector<float> fftInput, fftFwdBwd, fftNrm, fftArg;
     int size = 0;
 
@@ -132,11 +132,11 @@ int main(int argc, char **argv)
 
     // compute FFT and inverse FFT on the CPU or the GPU
     if (device == DEVICE_CPU) {
-        imgDataFFT = dj::fft::eval_2d(imgData, dj::fft::e_dir::DIR_FWD);
-        imgDataInvFFT = dj::fft::eval_2d(imgDataFFT, dj::fft::e_dir::DIR_BWD);
+        imgDataFFT = dj::fft2d(imgData, dj::fft_dir::DIR_FWD);
+        imgDataInvFFT = dj::fft2d(imgDataFFT, dj::fft_dir::DIR_BWD);
     } else if (device == DEVICE_GPU) {
-        imgDataFFT = dj::fft::eval_2d_gpu(imgData, dj::fft::e_dir::DIR_FWD);
-        imgDataInvFFT = dj::fft::eval_2d_gpu(imgDataFFT, dj::fft::e_dir::DIR_BWD);
+        imgDataFFT = dj::fft2d_gpu(imgData, dj::fft_dir::DIR_FWD);
+        imgDataInvFFT = dj::fft2d_gpu(imgDataFFT, dj::fft_dir::DIR_BWD);
     }
 
     // build norm array and phase array
