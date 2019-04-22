@@ -41,7 +41,7 @@ some_function()
   }
 
   // compute forward 2D FFT
-  auto fftData = dj::fft2d(myData, dj::fft_dir::FFT_FWD);
+  auto fftData = dj::fft2d(myData, dj::fft_dir::DIR_FWD);
 
   // print the data
   for (int j = 0; j < N; ++j) {
