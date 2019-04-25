@@ -113,7 +113,6 @@ int bitr(uint32_t x, int nb)
 template <typename T> fft_arg<T> fft1d(const fft_arg<T> &xi, const fft_dir &dir)
 {
     DJ_ASSERT((xi.size() & (xi.size() - 1)) == 0 && "invalid input size");
-    DJ_ASSERT(xi.size() == xo.size());
     int cnt = (int)xi.size();
     int msb = findMSB(cnt);
     T nrm = T(1) / std::sqrt(T(cnt));
@@ -156,6 +155,7 @@ template <typename T> fft_arg<T> fft1d(const fft_arg<T> &xi, const fft_dir &dir)
 template <typename T> void fft1d(const fft_arg<T> &xi, fft_arg<T> &xo, const fft_dir &dir)
 {
 	DJ_ASSERT((xi.size() & (xi.size() - 1)) == 0 && "invalid input size");
+    DJ_ASSERT(xi.size() == xo.size());
 	int cnt = (int)xi.size();
 	int msb = findMSB(cnt);
 	T nrm = T(1) / std::sqrt(T(cnt));
