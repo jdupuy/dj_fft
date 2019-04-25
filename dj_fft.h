@@ -116,7 +116,7 @@ template <typename T> fft_arg<T> fft1d(const fft_arg<T> &xi, const fft_dir &dir)
     int cnt = (int)xi.size();
     int msb = findMSB(cnt);
     T nrm = T(1) / std::sqrt(T(cnt));
-	fft_arg<T> xo(cnt);
+    fft_arg<T> xo(cnt);
 
     // pre-process the input data
     for (int j = 0; j < cnt; ++j)
