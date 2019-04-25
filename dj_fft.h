@@ -25,6 +25,7 @@ enum class fft_dir {DIR_FWD = +1, DIR_BWD = -1};
 
 // FFT routines
 template<typename T> fft_arg<T> fft1d(const fft_arg<T> &xi, const fft_dir &dir);
+template<typename T> void fft1d(const fft_arg<T> &xi, fft_arg<T> &xo, const fft_dir &dir);
 template<typename T> fft_arg<T> fft2d(const fft_arg<T> &xi, const fft_dir &dir);
 template<typename T> fft_arg<T> fft3d(const fft_arg<T> &xi, const fft_dir &dir);
 
@@ -115,7 +116,7 @@ template <typename T> fft_arg<T> fft1d(const fft_arg<T> &xi, const fft_dir &dir)
     int cnt = (int)xi.size();
     int msb = findMSB(cnt);
     T nrm = T(1) / std::sqrt(T(cnt));
-    fft_arg<T> xo(cnt);
+	fft_arg<T> xo(cnt);
 
     // pre-process the input data
     for (int j = 0; j < cnt; ++j)
@@ -141,6 +142,45 @@ template <typename T> fft_arg<T> fft1d(const fft_arg<T> &xi, const fft_dir &dir)
     }
 
     return xo;
+}
+
+
+/*
+ * Computes a Fourier transform, i.e.,
+ * xo[k] = 1/sqrt(N) sum(j=0 -> N-1) xi[j] exp(i 2pi j k / N)
+ * with O(N log N) complexity using the butterfly technique
+ *
+ * NOTE: Only works for arrays whose size is a power-of-two
+ */
+template <typename T> void fft1d(const fft_arg<T> &xi, fft_arg<T> &xo, const fft_dir &dir)
+{
+	DJ_ASSERT((xi.size() & (xi.size() - 1)) == 0 && "invalid input size");
+	int cnt = (int)xi.size();
+	int msb = findMSB(cnt);
+	T nrm = T(1) / std::sqrt(T(cnt));
+
+	// pre-process the input data
+	for (int j = 0; j < cnt; ++j)
+		xo[j] = nrm * xi[bitr(j, msb)];
+
+	// fft passes
+	for (int i = 0; i < msb; ++i) {
+		int bm = 1 << i; // butterfly mask
+		int bw = 2 << i; // butterfly width
+		T ang = T(dir) * Pi / T(bm); // precomputation
+
+		// fft butterflies
+		for (int j = 0; j < (cnt / 2); ++j) {
+			int i1 = ((j >> i) << (i + 1)) + j % bm; // left wing
+			int i2 = i1 ^ bm;                        // right wing
+			std::complex<T> z1 = std::polar(T(1), ang * T(i1 ^ bw)); // left wing rotation
+			std::complex<T> z2 = std::polar(T(1), ang * T(i2 ^ bw)); // right wing rotation
+			std::complex<T> tmp = xo[i1];
+
+			xo[i1] += z1 * xo[i2];
+			xo[i2] = tmp + z2 * xo[i2];
+		}
+	}
 }
 
 
