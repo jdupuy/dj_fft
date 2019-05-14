@@ -528,8 +528,6 @@ static const char s_ComputeShaderSrc[] = {
     "uniform int u_ArgSize; // N\n"
     "uniform int u_PassID;  // pass number in [0, lg2(N))\n\n"
 
-    "layout (local_size_x = 1,  local_size_y = 1, local_size_z = 1) in;\n\n"
-
     "vec2 expi(float ang) { return vec2(cos(ang), sin(ang)); }\n"
     "vec2 zmul(vec2 z1, vec2 z2) {\n"
     "    return vec2(z1.x * z2.x - z1.y * z2.y,\n"
@@ -537,6 +535,7 @@ static const char s_ComputeShaderSrc[] = {
     "}\n\n"
 
     "#ifdef FFT_1D\n"
+    "layout (local_size_x = 32,  local_size_y = 1, local_size_z = 1) in;\n\n"
     "layout (rg32f) uniform coherent image1D u_Arg; // FFT arg\n"
     "void main()\n"
     "{\n"
@@ -563,6 +562,7 @@ static const char s_ComputeShaderSrc[] = {
     "#endif\n\n"
 
     "#ifdef FFT_2D\n"
+    "layout (local_size_x = 32,  local_size_y = 32, local_size_z = 1) in;\n\n"
     "layout (rg32f) uniform coherent image2D u_Arg; // FFT arg\n"
     "void main()\n"
     "{\n"
@@ -619,6 +619,7 @@ static const char s_ComputeShaderSrc[] = {
     "#endif\n\n"
     ""
     "#ifdef FFT_3D\n"
+    "layout (local_size_x = 32,  local_size_y = 32, local_size_z = 32) in;\n\n"
     "layout (rg32f) uniform image3D u_Arg; // FFT arg\n"
     "void main()\n"
     "{\n"
@@ -785,9 +786,12 @@ fft_arg<float> fft1d_gpu_glready(const fft_arg<float> &xi, const fft_dir &dir)
     }
 
     // run
+    cnt>>= 1;
     for (int i = 0; i < msb; ++i) {
+        int groupCnt = cnt > 32 ? cnt >> 5 : cnt & 31;
+
         glUniform1i(gl.uniformLocations.passID, i);
-        glDispatchCompute(cnt, 1, 1);
+        glDispatchCompute(groupCnt, 1, 1);
         glMemoryBarrier(GL_ALL_BARRIER_BITS);
     }
 
@@ -871,9 +875,12 @@ fft_arg<float> fft2d_gpu_glready(const fft_arg<float> &xi, const fft_dir &dir)
     }
 
     // run
+    cnt>>= 1;
     for (int i = 0; i < msb; ++i) {
+        int groupCnt = cnt > 32 ? cnt >> 5 : cnt & 31;
+
         glUniform1i(gl.uniformLocations.passID, i);
-        glDispatchCompute(cnt, cnt, 1);
+        glDispatchCompute(groupCnt, groupCnt, 1);
         glMemoryBarrier(GL_ALL_BARRIER_BITS);
     }
 
@@ -960,9 +967,12 @@ fft_arg<float> fft3d_gpu_glready(const fft_arg<float> &xi, const fft_dir &dir)
     }
 
     // run
+    cnt>>= 1;
     for (int i = 0; i < msb; ++i) {
+        int groupCnt = cnt > 32 ? cnt >> 5 : cnt & 31;
+
         glUniform1i(gl.uniformLocations.passID, i);
-        glDispatchCompute(cnt, cnt, cnt);
+        glDispatchCompute(groupCnt, groupCnt, groupCnt);
         glMemoryBarrier(GL_ALL_BARRIER_BITS);
     }
 
