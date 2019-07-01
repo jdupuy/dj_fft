@@ -788,7 +788,7 @@ fft_arg<float> fft1d_gpu_glready(const fft_arg<float> &xi, const fft_dir &dir)
     // run
     cnt>>= 1;
     for (int i = 0; i < msb; ++i) {
-        int groupCnt = cnt >= 32 ? cnt >> 5 : cnt & 31;
+        int groupCnt = cnt >= 32 ? cnt >> 5 : 1;
 
         glUniform1i(gl.uniformLocations.passID, i);
         glDispatchCompute(groupCnt, 1, 1);
@@ -877,7 +877,7 @@ fft_arg<float> fft2d_gpu_glready(const fft_arg<float> &xi, const fft_dir &dir)
     // run
     cnt>>= 1;
     for (int i = 0; i < msb; ++i) {
-        int groupCnt = cnt >= 32 ? cnt >> 5 : cnt & 31;
+        int groupCnt = cnt >= 32 ? cnt >> 5 : 1;
 
         glUniform1i(gl.uniformLocations.passID, i);
         glDispatchCompute(groupCnt, groupCnt, 1);
@@ -969,7 +969,7 @@ fft_arg<float> fft3d_gpu_glready(const fft_arg<float> &xi, const fft_dir &dir)
     // run
     cnt>>= 1;
     for (int i = 0; i < msb; ++i) {
-        int groupCnt = cnt >= 32 ? cnt >> 5 : cnt & 31;
+        int groupCnt = cnt >= 32 ? cnt >> 5 : 1;
 
         glUniform1i(gl.uniformLocations.passID, i);
         glDispatchCompute(groupCnt, groupCnt, groupCnt);
