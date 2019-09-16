@@ -109,4 +109,7 @@ For a complete example that compiles, see the examples/ directory.
 By default, the GPU accelerated routines run on the primary GPU. Users who want to run the FFT on a secondary GPU will have to create an OpenGL context themselves and use the `fftNd_gpu_glready` functions. You can create a custom OpenGL context with a cross-platform windowing library such as GLFW (https://www.glfw.org/), and an OpenGL function loader such as glad (https://glad.dav1d.de/). I'll probably add a sample at some point.
 
 ### License
-The code from this repository is released in public domain.
+This library is in the public domain. You can do anything you want with them. You have no legal obligation to do anything else, although I appreciate attribution.
+
+They are also licensed under the MIT open source license, if you have lawyers who are unhappy with public domain. Every source file includes an explicit dual-license for you to choose from.
+
