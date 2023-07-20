@@ -66,7 +66,7 @@ constexpr auto Pi = 3.141592653589793238462643383279502884;
  * 100b    -> 2d
  * 100000b -> 5d
  */
-int findMSB(int x)
+inline int findMSB(int x)
 {
     DJ_ASSERT(x > 0 && "invalid input");
     int p = 0;
@@ -89,7 +89,7 @@ int findMSB(int x)
  *  1011b    -> 1101b
  *  0111001b -> 1001110b
  */
-int bitr(uint32_t x, int nb)
+inline int bitr(uint32_t x, int nb)
 {
     DJ_ASSERT(nb > 0 && 32 > nb && "invalid bit count");
     x = ( x               << 16) | ( x               >> 16);
